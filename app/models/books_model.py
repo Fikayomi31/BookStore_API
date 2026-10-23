@@ -1,10 +1,9 @@
 from sqlalchemy import Column, Integer, String
-from sqlalchemy.orm import declarative_base
 from sqlalchemy import Enum as EnumSQLAlchemy
 
+from app.database.connection import Base
 from app.models.genres import BookGenre
 
-Base = declarative_base()
 
 class Book(Base):
     __tablename__ = 'books'
