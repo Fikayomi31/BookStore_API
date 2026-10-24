@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from app.models.genres import BookGenre
 
 """
-A Pydantic model for creating a new book.
+A Pydantic model for book creation, update, and response.
 """
 
 class BookCreate(BaseModel):
