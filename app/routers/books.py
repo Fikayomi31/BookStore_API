@@ -1,5 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.connection import get_db
@@ -13,24 +16,87 @@ router = APIRouter(
 
 @router.post("", response_model=BookResponse, status_code=status.HTTP_201_CREATED)
 
-async def create_book(book_data: BookCreate, db: AsyncSession = Depends(get_db)):
+async def create_book(
+    book_data: BookCreate, 
+    db: AsyncSession = Depends(get_db)
+):
 
-    # Validated pylandic model data is converted to a SQLAlchemy model instance
-    new_book = Book(**book_data.model_dump())
+    try:
+        # Check whether the same book already exists
+        result = await db.execute(
+            select(Book).where(
+                Book.title.ilike(book_data.title.strip()),
+                Book.author.ilike(book_data.author.strip())
+            )
+        )
+        existing_book = result.scalars().first()
+        if existing_book:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Book with the same title and author already exists"
+            )
+        
+        # Create  a new book 
+        new_book = Book(**book_data.model_dump())
 
-    db.add(new_book)
-    await db.commit()
-    await db.refresh(new_book)
 
-    return new_book
+        db.add(new_book)
+        await db.commit()
+        await db.refresh(new_book)
+
+        return new_book
+
+    except SQLAlchemyError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to create book"
+        )
+
+
 
 @router.get("", response_model=list[BookResponse])
-async def get_book(db: AsyncSession = Depends(get_db)):
+async def get_book(
+    title: str | None = Query(default=None, max_length=200),
+    author: str | None = Query(default=None, max_length=200),
+    sort_by: Literal["title", "author", "price", "published_year"] = "title",
+    order: Literal["asc", "desc"] = "asc",
+    db: AsyncSession = Depends(get_db)
+):
+    statement = select(Book)
 
-    result = await db.execute(select(Book))
-    books = result.scalars().all()
+    if title and title.strip():
+        statement = statement.where(
+            Book.title.ilike(f"%{title.strip()}%")
+        )
 
-    return books
+    if author and author.strip():
+        statement = statement.where(
+            Book.author.ilike(f"%{author.strip()}%")
+        )
+
+    if author and author.strip():
+        statement = statement.where(
+            Book.author.ilike(f"%{author.strip()}%")
+        )
+    sort_column = getattr(Book, sort_by)
+
+    statement = statement.order_by(
+        sort_column.asc() if order == "asc" else sort_column.desc()
+    )
+
+    try:
+        result = await db.execute(select(Book))
+        books = result.scalars().all()
+        return list(books)
+
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to retrieve books"
+        )
+
+    
 
 @router.get("/{book_id}", response_model=BookResponse)
 async def get_book_id(book_id: int, db: AsyncSession = Depends(get_db)):
@@ -59,14 +125,24 @@ async def update_book(
             detail="Book not found"
         )
 
-    update_data = book_data.model_dump()
-    for key, value in update_data.items():
-        setattr(book, key, value)
+    try:
 
-    await db.commit()
-    await db.refresh(book)
+        update_data = book_data.model_dump()
+        for key, value in update_data.items():
+            setattr(book, key, value)
 
-    return book
+        await db.commit()
+        await db.refresh(book)
+
+        return book
+
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to update book"
+        )
+
+    
 
 @router.delete("/{book_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_book(book_id: int, db: AsyncSession = Depends(get_db)):
@@ -78,7 +154,15 @@ async def delete_book(book_id: int, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Book not found"
         )
-    await db.delete(book)
-    await db.commit()
+    try:
+
+        await db.delete(book)
+        await db.commit()
+    except SQLAlchemyError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to delete book"
+        )
 
     return None
