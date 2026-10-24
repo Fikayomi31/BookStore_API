@@ -67,3 +67,18 @@ async def update_book(
     await db.refresh(book)
 
     return book
+
+@router.delete("/{book_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_book(book_id: int, db: AsyncSession = Depends(get_db)):
+
+    book = await db.get(Book, book_id)
+
+    if book is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Book not found"
+        )
+    await db.delete(book)
+    await db.commit()
+
+    return None
