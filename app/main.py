@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 
+from app.routers.books import router as books_router
+
 
 app = FastAPI(
     title="BookStore REST API",
@@ -8,13 +10,10 @@ app = FastAPI(
 )
 
 @app.get("/")
-def home():
+async def home():
     return {
         "message": "Welcome to the BookStore REST API!"
     }
 
-@app.get("/health")
-def health_check():
-    return {
-        "status": "healthy"
-    }
+
+app.include_router(books_router)

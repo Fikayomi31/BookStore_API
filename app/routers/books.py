@@ -25,7 +25,7 @@ async def create_book(book_data: BookCreate, db: AsyncSession = Depends(get_db))
     return new_book
 
 @router.get("", response_model=list[BookResponse])
-async def get_book(book_id: int, db: AsyncSession = Depends(get_db)):
+async def get_book(db: AsyncSession = Depends(get_db)):
 
     result = await db.execute(select(Book))
     books = result.scalars().all()
