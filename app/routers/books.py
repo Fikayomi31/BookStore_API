@@ -23,16 +23,16 @@ async def create_book(
 
     try:
         # Check whether the same book already exists
-        result = await db.execute(
-            select(Book).where(
+        statement = select(Book).where(
                 Book.title.ilike(book_data.title.strip()),
                 Book.author.ilike(book_data.author.strip())
             )
-        )
+        result = await db.execute(statement)
+
         existing_book = result.scalars().first()
         if existing_book:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_409_CONFLICT,
                 detail="Book with the same title and author already exists"
             )
         
@@ -75,19 +75,17 @@ async def get_book(
             Book.author.ilike(f"%{author.strip()}%")
         )
 
-    if author and author.strip():
-        statement = statement.where(
-            Book.author.ilike(f"%{author.strip()}%")
-        )
     sort_column = getattr(Book, sort_by)
 
-    statement = statement.order_by(
-        sort_column.asc() if order == "asc" else sort_column.desc()
-    )
+    if order == "asc":
+        statement = statement.order_by(sort_column.asc())
+    else:
+        statement = statement.order_by(sort_column.desc())
 
     try:
-        result = await db.execute(select(Book))
+        result = await db.execute(statement)
         books = result.scalars().all()
+
         return list(books)
 
     except SQLAlchemyError:
@@ -97,44 +95,70 @@ async def get_book(
         )
 
     
-
+# Get book by ID
 @router.get("/{book_id}", response_model=BookResponse)
 async def get_book_id(book_id: int, db: AsyncSession = Depends(get_db)):
 
-    book = await db.get(Book, book_id)
+    try:
+        book = await db.get(Book, book_id)
 
-    if book is None:
+        if book is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Book not found"
+            )
+        
+        return book
+    except HTTPException:
+        raise
+
+    except SQLAlchemyError:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Book not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to retrieve book"
         )
-    
-    return book
 
+# Update book by ID
 @router.put("/{book_id}", response_model=BookResponse)
 async def update_book(
     book_id: int, 
     book_data: BookCreate,
     db: AsyncSession = Depends(get_db)
 ):
-    book = await db.get(Book, book_id)
+    try:
+        book = await db.get(Book, book_id)
 
-    if book is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Book not found"
+        if book is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Book not found"
+            )
+
+        # prevent updating to a title and author that already exists in another book
+        statement = select(Book).where(
+            Book.title.ilike(book_data.title),
+            Book.author.ilike(book_data.author),
+            Book.id != book_id
         )
 
-    try:
+        result = await db.execute(statement)
+        existing_book = result.scalars().first()
 
+        if existing_book:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Another book with the same title and author already exists"
+            )
+        
         update_data = book_data.model_dump()
         for key, value in update_data.items():
             setattr(book, key, value)
-
         await db.commit()
         await db.refresh(book)
 
         return book
+    except HTTPException:
+        raise
 
     except SQLAlchemyError:
         raise HTTPException(
@@ -142,22 +166,26 @@ async def update_book(
             detail="Unable to update book"
         )
 
-    
 
+# Delete a book
 @router.delete("/{book_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_book(book_id: int, db: AsyncSession = Depends(get_db)):
 
-    book = await db.get(Book, book_id)
-
-    if book is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Book not found"
-        )
     try:
+        book = await db.get(Book, book_id)
 
+        if book is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Book not found"
+            )
+        
         await db.delete(book)
         await db.commit()
+
+    except HTTPException:
+        raise
+
     except SQLAlchemyError:
         await db.rollback()
         raise HTTPException(
