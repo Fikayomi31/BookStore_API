@@ -14,8 +14,8 @@ router = APIRouter(
     tags=["books"]
 )
 
+# Create a new book
 @router.post("", response_model=BookResponse, status_code=status.HTTP_201_CREATED)
-
 async def create_book(
     book_data: BookCreate, 
     db: AsyncSession = Depends(get_db)
@@ -54,7 +54,7 @@ async def create_book(
         )
 
 
-
+# Get all books with optional filtering and sorting
 @router.get("", response_model=list[BookResponse])
 async def get_book(
     title: str | None = Query(default=None, max_length=200),
