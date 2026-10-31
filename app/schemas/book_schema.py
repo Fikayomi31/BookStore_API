@@ -51,6 +51,6 @@ class BookResponse(BaseModel):
     description: str | None
     genre: BookGenre
     price : float
-    published_year: int | None
+    published_year: int 
 
     model_config = ConfigDict(from_attributes=True)

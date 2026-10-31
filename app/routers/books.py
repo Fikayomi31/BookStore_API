@@ -122,7 +122,7 @@ async def get_book_id(book_id: int, db: AsyncSession = Depends(get_db)):
 @router.put("/{book_id}", response_model=BookResponse)
 async def update_book(
     book_id: int, 
-    book_data: BookCreate,
+    book_data: BookUpdate,
     db: AsyncSession = Depends(get_db)
 ):
     try:

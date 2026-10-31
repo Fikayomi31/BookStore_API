@@ -43,15 +43,11 @@ BookStore_API/
 │   │   └── books.py
 │   └── schemas/
 │       └── book_schema.py
-├── tests/
-│   └── test_books.py
 ├── main.py
 ├── requirements.txt
 ├── .gitignore
 └── README.md
 ```
-
-*The `tests/` folder is used for automated tests. Add it if it has not yet been created. Your exact structure may differ slightly depending on the files in your project.*
 
 ## Getting Started
 
@@ -127,7 +123,7 @@ Run this command from the project root, and only if the initializer supports mod
 The database connection should use an asynchronous SQLite URL similar to:
 
 ```python
-DATABASE_URL = "sqlite+aiosqlite:///./bookstore.db"
+DATABASE_URL = "sqlite+aiosqlite:///./test.db"
 ```
 
 The actual database location depends on your configured URL and the working directory. Keep your database file out of version control.
